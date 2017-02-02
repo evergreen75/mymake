@@ -23,7 +23,7 @@ void addRule(Rule* listRules, Rule* addRule)
 {
     if (listRules == NULL)
     {
-        listRules = (Rule*) malloc (sizeof (Rule));
+        listRules = addRule;
     }
     else
     {
@@ -35,6 +35,13 @@ void addRule(Rule* listRules, Rule* addRule)
             }
         }
     }
+}
+
+// creates a Rule from a target.
+
+Rule* createRules(FILE* fileZ, const char* target)
+{
+    return NULL;
 }
 
 void printArrayOfStrings(char* arrayString[], int i)
@@ -55,18 +62,7 @@ char* skipSpaces(char* str)
     return s;
 }
 
-int countCharacters(char* str)
-{
-    char* s = str;
-    int i = 0;
-    while (*s != ' ' || *s != '\t')
-    {
-        i++;
-        s++;
-    }
-    return i;
-}
-
+void 
 // readMakeFile() reads in a make file "path" and stores
 // information in a linked list of Rules.
 
@@ -75,22 +71,23 @@ Rule* readMakeFile(const char* path)
     const int MAX_LINE_LENGTH = 100;
     int i = 0;
     char line[MAX_LINE_LENGTH];
-    Rule* rules = (Rule*) malloc (sizeof (Rule));
+    Rule* rules = NULL;
     FILE* fe = fopen (path, "r");
     while (fgets(line, sizeof(line), fe)){
         if (strstr(line, ":") != NULL)
         {
-            //printf("target\n");
+            printf("target\n");
         }
         else if (line[0] == '\t')
         {
-            //printf("command\n");
+            printf("command\n");
         }
         else
         {
 
         }
       i++;
+      printf("%s\n", line);
     }
    
     fclose(fe);
@@ -119,6 +116,7 @@ Rule* findRule(const char* target)
 }
 int main(void)
   {
+      printf("wtf");
       readMakeFile("Makefile");
       return 0;
   }
