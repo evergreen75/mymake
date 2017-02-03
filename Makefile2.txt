@@ -1,0 +1,5 @@
+huffman: huffman.o bar.o foo.o
+	g++ -o huffman bar.o foo.o
+
+bar.o: nothing.o
+	gcc -c bar.o 
