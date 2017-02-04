@@ -59,14 +59,65 @@ int countCharacters(char* str)
 {
     char* s = str;
     int i = 0;
-    while (*s != ' ' || *s != '\t')
+    while (!(*s == ' ' || *s == '\0') || *s == '\t' || *s == '\n')
     {
         i++;
-        s++;
+        s++; 
     }
     return i;
 }
 
+char* getDependency(char* linePointer, int countChar)
+{
+    char* depend;
+    depend = (char *)malloc(sizeof(char)* countChar);
+    for (int i = 0; i < countChar; i++)
+    {
+        depend[i] = linePointer[i];
+    }
+    depend[countChar] = '\0';
+    return depend;
+}
+
+void readLine(char* line, Rule* rule)
+{
+       if (strstr(line, ":") != NULL)
+        {
+            int i = 0;
+            char target[50];
+            char* g = skipSpaces(line);
+            while (*g != ':')
+            {
+                target[i] = *g;
+                g++; i++;
+            }
+            target[i] = '\0';
+            Rule* newRule;
+            addRule(rule, newRule);
+            newRule->target = target;
+            g++;
+            g = skipSpaces(g);
+            int numChars = countCharacters(g);
+            int j = 0;
+            while (*g != '\0')
+            {
+                g = skipSpaces(g);
+                numChars = countCharacters(g);
+                newRule->dependencies[j] = getDependency(g, numChars);
+                j++;
+                g = g + numChars;
+            }
+            printf("%s %s\n", "target is", newRule->target);
+            for (int index = 0; index < j; index++)
+            {
+            	printf("dependency %d : %s\n", index, newRule->dependencies[i]);
+            }
+        }
+        else if (line[0] == '\t')
+        {
+            //printf("command\n");
+        }
+}
 // readMakeFile() reads in a make file "path" and stores
 // information in a linked list of Rules.
 
@@ -77,24 +128,14 @@ Rule* readMakeFile(const char* path)
     char line[MAX_LINE_LENGTH];
     Rule* rules = (Rule*) malloc (sizeof (Rule));
     FILE* fe = fopen (path, "r");
-    while (fgets(line, sizeof(line), fe)){
-        if (strstr(line, ":") != NULL)
-        {
-            //printf("target\n");
-        }
-        else if (line[0] == '\t')
-        {
-            //printf("command\n");
-        }
-        else
-        {
-
-        }
-      i++;
+    while (fgets(line, sizeof(line), fe))
+    {
+        readLine(line, rules);
+        i++;
     }
    
     fclose(fe);
-    return NULL;
+    return rules;
 }
 
 // parseCommand(target, rules) finds a rule for a target
@@ -119,6 +160,6 @@ Rule* findRule(const char* target)
 }
 int main(void)
   {
-      readMakeFile("Makefile");
+      readMakeFile("Makefile.txt");
       return 0;
   }
