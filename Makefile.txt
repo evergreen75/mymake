@@ -1,8 +1,3 @@
-CFLAGS = -g -O
-CC = g++
-LINK = g++ 
-OFILES = huffman.o pqueue.o trace.o binary1.o
-OFILES2 = unhuffman.o pqueue.o trace.o binary1.o
 
 test: huffman
 	./huffman
