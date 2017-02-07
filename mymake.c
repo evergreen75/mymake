@@ -6,60 +6,91 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <ctype.h>
 
 #define true -1
 #define false -2
 
 typedef struct rule {
     char* target;
-    char** dependencies;
+    char* dependencies[10];
     int numDependencies;
-    char** commands;
+    char* commands[10];
     int numCommands;
     struct rule* next;
 } Rule;
 
-typedef struct linkedlist {
-    struct rule* head;
-} List;
-// addRule(listRules, addRule) adds a Rule
-// structure into a linked list of Rules
-
-List* createList()
+void createList(Rule** head)
 {
-    List* hd = malloc(sizeof(*hd));
-    return hd;
+	*head = NULL;
 }
 
-Rule* createRule(char* target, char** dependencies, int numD, char** comm, int numC, Rule* nxt)
+void insertRule(Rule** head, Rule* newRule)
 {
-    Rule* newRule = malloc(sizeof(*newRule));
-    newRule->target = target;
-    newRule->dependencies = dependencies;
-    newRule->numDependencies = numD;
-    newRule->commands = comm;
+	Rule* current;
+	if (*head == NULL)
+	{
+		*head = newRule;
+	}
+	  else
+    {
+    	current = *head;
+    	while (current->next != NULL)
+    	{
+    		current = current->next;
+    	}
+    	current->next = newRule;
+    	newRule->next = NULL;
+    }
+}
+
+void fillRule(Rule* newRule, char* target, char** dependencies, int numD, char** comm, int numC)
+{
+	newRule->next = NULL;
+	newRule->target = target;
+	for (int i = 0; i < numD; i++)
+	{
+		newRule->dependencies[i] = dependencies[i];
+	}	
+	newRule->numDependencies = numD;
+    for (int i = 0; i < numC; i++)
+	{
+		newRule->commands[i] = comm[i];
+	}	
     newRule->numCommands = numC;
-    newRule->next = nxt;
-    return newRule;
 }
-void addRule(List* list, Rule* data)
+void insert(Rule** head, char* target, char** dependencies, int numD, char** comm, int numC)
 {
-    List* p = list;
-   if (list == NULL)
-   {
-        list->head = data;
-   }
-   else
-   {
-        while (p->head->next != NULL)
-        {
-            p->head = p->head->next;
-        }
-        p->head->next = createRule(data->target, data->dependencies,
-                            data->numDependencies, data->commands,
-                            data->numCommands, data->next);
-   }
+	Rule* newRule;
+	Rule* current;
+	newRule = (Rule*)malloc(sizeof(Rule));
+	newRule->next = NULL;
+	newRule->target = target;
+	for (int i = 0; i < numD; i++)
+	{
+		newRule->dependencies[i] = dependencies[i];
+	}	
+	newRule->numDependencies = numD;
+	for (int i = 0; i < numC; i++)
+	{
+		newRule->commands[i] = comm[i];
+	}	
+    newRule->numCommands = numC;
+    if (*head == NULL)
+    {
+    	*head = newRule;
+    }
+    else
+    {
+    	current = *head;
+    	while (current->next != NULL)
+    	{
+    		current = current->next;
+    	}
+    	current->next = newRule;
+    }
 }
+
 
 void printArrayOfStrings(char* arrayString[], int i)
 {
@@ -72,7 +103,7 @@ void printArrayOfStrings(char* arrayString[], int i)
 char* skipSpaces(char* str)
 {
     char* s = str;
-    while (*s == '\t' || *s == ' ')
+    while (*s == '\t' || *s == ' ' || *s == '\n')
     {
         s++;
     }
@@ -82,7 +113,7 @@ char* skipSpaces(char* str)
 int isBlankLine(char* line)
 {
     char* g = line;
-    int length = strlen(line);
+    int length = strlen(g);
     int index = 0;
     while (index < length)
     {
@@ -95,6 +126,7 @@ int isBlankLine(char* line)
             return false;
         }
         index++;
+        g++;
     }
     return true;
 }
@@ -111,81 +143,107 @@ void storeDependency(char* dep, char* line)
         i++;
     }
 }
-int lineNumber = 1;
-void readLine(char* line, List* list)
-{
-    int index = 0;
-    if (isBlankLine(line) == true)
-    {
-        return;
-    }
-    //printf("%s %d %s %s", "line ", lineNumber, "is -> ", line);
-    lineNumber++;
-    char* lineCopy = line;
 
-        // line is a target line
-       if (strstr(line, ":") != NULL)
-        {
-            char* target = (char*)malloc(sizeof(char) * 30);
-            char** dependencies = (char**)malloc(sizeof(char) * 30);
-            lineCopy = skipSpaces(lineCopy);
-            while (*lineCopy != ':')
-            {
-                target[index] = *lineCopy;
-                lineCopy++; index++;
-            }
-            target[index] = '\0';
-            index = 0;
-            lineCopy+=1;
-            int j = 0;
-            lineCopy = skipSpaces(lineCopy);
-            while (isBlankLine(lineCopy) != true)
-            {
-                
-                lineCopy = skipSpaces(lineCopy);
-                 printf("%s", lineCopy);
-                 // for separating dependencies
-               while (!(*lineCopy == ' ' || *lineCopy == '\t' || *lineCopy == '\n' || *lineCopy == '\0'))
-                {
-                    //lineCopy = skipSpaces(lineCopy);
-                    //dependencies[j][1] = 'c';
-                    //if (*lineCopy == '\0')
-                    {
-                      //  break;
-                     
-                    }
-                    printf("%s", lineCopy);
-                    lineCopy++;
-                     lineCopy = skipSpaces(lineCopy);
-                }
-                j++;
-            }
-           // if (isBlankLine(lineCopy) == true)
-            //{
-              //  return; 
-            //}
-            //printf("%s", lineCopy);
-        }
-      
+
+int lineNumber = 1;
+void readLine(char* line, Rule* list)
+{
+   // printf("%s %d %s %s", "line ", lineNumber, "is -> ", line);
+	if (strstr(line, ":") != NULL)
+	{
+		char** dependencies = (char**)malloc(sizeof(char*) * 10);
+		for (int i = 0; i < 10; i++)
+		{
+			dependencies[i] = (char*)malloc(sizeof(char) * 30);
+		}
+		char* target = (char*)malloc(sizeof(char) * 30);
+		char* linePtr = line;
+		size_t ln = strlen(linePtr) - 1;
+		if (line[ln] == '\n')
+		{
+			line[ln] = '\0';
+		}
+		linePtr = skipSpaces(linePtr);
+		int index = 0;
+		while (*linePtr != ':')
+		{
+			target[index] = *linePtr;
+			index++; linePtr++;
+		}
+		target[index] = '\0';
+		linePtr++;
+		linePtr = skipSpaces(linePtr);
+		if (isBlankLine(linePtr) == true)
+		{
+			return;
+		}
+		
+		int stringNumber = 0;
+		int charIndex = 0;
+		int numDependencies = 0;
+		while (isBlankLine(linePtr) == false)//(isBlankLine(linePtr) == false)
+		{
+			char buffer[50]; //= (char*)malloc(sizeof(char) * 50);
+			linePtr = skipSpaces(linePtr);
+			while (!isspace(*linePtr))
+			{
+				// if last string [hello] error handle null char not added**** 
+				if (*linePtr == '\0')
+				{
+					buffer[charIndex] = *linePtr;
+					strcpy(dependencies[stringNumber], buffer);
+					break; 
+				}
+				else
+				{
+					buffer[charIndex] = *linePtr;
+					//printf("%c %c\n", buffer[charIndex], *linePtr);
+					linePtr++; charIndex++;
+				}
+			}
+			buffer[charIndex] = '\0';
+			charIndex = 0;
+			//printf("%s", buffer);
+			strcpy(dependencies[stringNumber], buffer);
+			//free(buffer);
+			stringNumber++;
+
+			//printf("%d", stringNumber);
+		}
+		int a = 0;
+		//strcpy(dependencies[0], "THIS IS A TEST");
+		printArrayOfStrings(dependencies, stringNumber);
+		while (a < stringNumber)
+		{
+			//printf("%s\n", dependencies[a]);
+			a++;
+		}
+
+	}
 }
+
 // readMakeFile() reads in a make file "path" and stores
 // information in a linked list of Rules.
 
-List* readMakeFile(const char* path)
+Rule* readMakeFile(const char* path)
 {
     const int MAX_LINE_LENGTH = 100;
     int i = 0;
     char line[MAX_LINE_LENGTH];
-    List* list = createList();
+   	Rule* head;
+   	createList(&head);
     FILE* fe = fopen (path, "r");
     while (fgets(line, sizeof(line), fe))
     {
-        readLine(line, list);
+        readLine(line, head);
         i++;
     }
-   
+   for (Rule* p = head; p!= NULL; p = p->next)
+   {
+   	printf("%s", p->dependencies[0]);
+   }
     fclose(fe);
-    return list;
+    return head;
 }
 
 // parseCommand(target, rules) finds a rule for a target
@@ -210,14 +268,21 @@ Rule* findRule(const char* target)
 }
 int main(void)
   {
-
-      readMakeFile("Makefile2.txt");
-      //g.target = "oop";
-     
-      //printf("%s", head->target);
-     // printf("%s" , g->target);
-     
-      //addRule(head, newNode);
-
+  	Rule* head;
+  	createList(&head);
+  	readMakeFile("Makefile2.txt");
+  	Rule* rl = (Rule*)malloc(sizeof(Rule));
+  	//rl->target = "hello";
+  	Rule* g = (Rule*)malloc(sizeof(Rule));
+  	rl->next = NULL;
+  	fillRule(rl, "hello", NULL, 0, NULL, 0);
+  	g->next = NULL;
+  	g->target = "chase";
+  	insertRule(&head, rl);
+  	insertRule(&head, g);
+  	
+  	//insert(&head, "test2", NULL, 0, NULL, 0);
+  
+    
       return 0;
   }
