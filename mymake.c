@@ -1,3 +1,14 @@
+// Author: Joshua Bowen
+// Date: 02/02/16
+// CSCI 3000
+
+// The purpose of this program is to simulate a simplified version of the command make.
+// Processes lines of targets/dependencies/commands given to the program in a file
+// created by the user called Makefile with the standard Makefile format. 
+// File must be named Makefile and contain only targets/dependencies/commands or comment lines starting
+// with a '#' character.
+// The target to be made must be specified in an argument when program is run. arg[1] is the argument
+// of the target that is intended to be made.
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -7,9 +18,13 @@
 #include <time.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-#define true -1
-#define false -2
+#define true 1
+#define false 0
+
+// Structure for representing a rule.
 
 typedef struct rule {
     char* target;
@@ -20,61 +35,50 @@ typedef struct rule {
     struct rule* next;
 } Rule;
 
+void buildDependency(char* dependency, Rule* rules);
+void buildTarget(char* target, Rule* rules);
+int maxModTime(char* target, Rule* rules);
+int upToDate(char* target, Rule* rules);
+
+// Creates an empty Linked List from head which is a pointer
+// to first Rule Structure in empty list. (NULL to start with).
+
 void createList(Rule** head)
 {
 	*head = NULL;
 }
 
-void insertRule(Rule** head, Rule* newRule)
-{
-	Rule* current;
-	if (*head == NULL)
-	{
-		*head = newRule;
-	}
-	  else
-    {
-    	current = *head;
-    	while (current->next != NULL)
-    	{
-    		current = current->next;
-    	}
-    	current->next = newRule;
-    	newRule->next = NULL;
-    }
-}
+// Inserts a rule into a linked list being pointed to by head. target, dependencies
+// numD, comm, and numC are all variables representing their respective data fields in a rule structure.
 
-void fillRule(Rule* newRule, char* target, char** dependencies, int numD, char** comm, int numC)
-{
-	newRule->next = NULL;
-	newRule->target = target;
-	for (int i = 0; i < numD; i++)
-	{
-		newRule->dependencies[i] = dependencies[i];
-	}	
-	newRule->numDependencies = numD;
-    for (int i = 0; i < numC; i++)
-	{
-		newRule->commands[i] = comm[i];
-	}	
-    newRule->numCommands = numC;
-}
 void insert(Rule** head, char* target, char** dependencies, int numD, char** comm, int numC)
 {
 	Rule* newRule;
-	Rule* current;
+	Rule* temp;
 	newRule = (Rule*)malloc(sizeof(Rule));
 	newRule->next = NULL;
-	newRule->target = target;
-	for (int i = 0; i < numD; i++)
+	newRule->target = malloc(sizeof(char)* 30);
+	strcpy(newRule->target, target);
+	int i;
+	for (i = 0; i < numD; i++)
 	{
-		newRule->dependencies[i] = dependencies[i];
+		newRule->dependencies[i] = (char*)malloc(sizeof(char) * 30);
+		strcpy(newRule->dependencies[i], dependencies[i]);
 	}	
 	newRule->numDependencies = numD;
-	for (int i = 0; i < numC; i++)
+	for (i = 0; i < numC; i++)
 	{
-		newRule->commands[i] = comm[i];
-	}	
+		newRule->commands[i] = (char*)malloc(sizeof(char) * 30);
+		strcpy(newRule->commands[i], comm[i]);
+	}
+	// ** Since we are inserting commands into a rule AFTER it has been intialized already. **	
+	if (numC == 0)
+	{
+		for (i = 0; i < 10; i++)
+		{
+			newRule->commands[i] = (char*)malloc(sizeof(char) * 30);
+		}
+	}  // ****************************************************************************
     newRule->numCommands = numC;
     if (*head == NULL)
     {
@@ -82,23 +86,50 @@ void insert(Rule** head, char* target, char** dependencies, int numD, char** com
     }
     else
     {
-    	current = *head;
-    	while (current->next != NULL)
-    	{
-    		current = current->next;
-    	}
-    	current->next = newRule;
+    	temp = *head;
+		*head = newRule;
+		newRule->next = temp;
     }
 }
 
+// Prints a list of rules pointed to by head.
+
+void printListOfRules(Rule* head)
+{
+	Rule* g;
+	for (g = head; g!= NULL; g = g->next)
+	{
+		int i;
+		printf("%s %s\n", "Target: ", g->target);
+		for (i = 0; i < g->numDependencies; i++)
+		{
+			printf("%s %d %s %s \n", "Dependency", i, "= ", g->dependencies[i]);
+		}
+		printf("%s %d \n", "Number of dependencies is:", g->numDependencies);
+		for (i = 0; i < g->numCommands; i++)
+		{
+			printf("%s %d %s %s \n", "Command", i, "= ", g->commands[i]);
+		}
+		printf("%s %d \n", "Number of commands is:", g->numCommands);
+		printf("\n");
+	}
+}
+
+// Prints an array of strings of type char**. i is used 
+// to indicate size of the pointer array.
 
 void printArrayOfStrings(char* arrayString[], int i)
 {
-    for (int j = 0; j < i; j++)
+	int j;
+    for (j = 0; j < i; j++)
     {
-        printf("%s\n", arrayString[j]);
+        printf("%d %s %s  ", j,":",  arrayString[j]);
     }
+	printf("\n");
 }
+
+// Skips spaces in a string and returns a pointer to the first non-whitespace
+// character available.
 
 char* skipSpaces(char* str)
 {
@@ -109,6 +140,9 @@ char* skipSpaces(char* str)
     }
     return s;
 }
+
+// Checks whether or not a line is blank with all characters
+// being whitespace. Returns true if so, false if not.
 
 int isBlankLine(char* line)
 {
@@ -131,38 +165,59 @@ int isBlankLine(char* line)
     return true;
 }
 
+// Processes a line, and stores individual strings into array of strings
+// lineType. Can be used for processing a line of dependencies or commands.
+// Returns number of individual strings read into lineType.
 
-void storeDependency(char* dep, char* line)
+int processLine(char* line, char** lineType)
 {
-    int i = 0;
-    char* cpy = line;
-    while (*line != ' ' && *line != '\n' && *line != '\t' && *line != '\0')
-    {
-        dep[i] = *line;
-        line++;
-        i++;
-    }
+	char buffer[50];
+	int stringNumber = 0;
+	int charIndex = 0;
+	char* linePtr = line;
+	linePtr = skipSpaces(linePtr);
+		while (isBlankLine(linePtr) != true)
+		{
+			linePtr = skipSpaces(linePtr);
+			while (!isspace(*linePtr))
+			{
+				if (*linePtr == '\0')
+				{
+					buffer[charIndex] = *linePtr;
+					strcpy(lineType[stringNumber], buffer);
+					break; 
+				}
+				else
+				{
+					buffer[charIndex] = *linePtr;
+					linePtr++; charIndex++;
+				}
+			}
+			buffer[charIndex] = '\0';
+			charIndex = 0;
+			strcpy(lineType[stringNumber], buffer);
+			stringNumber++;
+		}
+		return stringNumber;
 }
 
+// Reads in a line and stores rules found into a linked list pointed
+// to by head. 
 
-int lineNumber = 1;
-void readLine(char* line, Rule* list)
+void readLine(char* line, Rule** head)
 {
-   // printf("%s %d %s %s", "line ", lineNumber, "is -> ", line);
+	char* linePtr = line;
+	// Line is a target line check. Process target first before proceeding.
+	// Create a new rule as well.
 	if (strstr(line, ":") != NULL)
 	{
+		int i;
 		char** dependencies = (char**)malloc(sizeof(char*) * 10);
-		for (int i = 0; i < 10; i++)
+		for (i = 0; i < 10; i++)
 		{
 			dependencies[i] = (char*)malloc(sizeof(char) * 30);
 		}
 		char* target = (char*)malloc(sizeof(char) * 30);
-		char* linePtr = line;
-		size_t ln = strlen(linePtr) - 1;
-		if (line[ln] == '\n')
-		{
-			line[ln] = '\0';
-		}
 		linePtr = skipSpaces(linePtr);
 		int index = 0;
 		while (*linePtr != ':')
@@ -172,117 +227,229 @@ void readLine(char* line, Rule* list)
 		}
 		target[index] = '\0';
 		linePtr++;
-		linePtr = skipSpaces(linePtr);
-		if (isBlankLine(linePtr) == true)
-		{
-			return;
-		}
-		
-		int stringNumber = 0;
-		int charIndex = 0;
-		int numDependencies = 0;
-		while (isBlankLine(linePtr) == false)//(isBlankLine(linePtr) == false)
-		{
-			char buffer[50]; //= (char*)malloc(sizeof(char) * 50);
-			linePtr = skipSpaces(linePtr);
-			while (!isspace(*linePtr))
-			{
-				// if last string [hello] error handle null char not added**** 
-				if (*linePtr == '\0')
-				{
-					buffer[charIndex] = *linePtr;
-					strcpy(dependencies[stringNumber], buffer);
-					break; 
-				}
-				else
-				{
-					buffer[charIndex] = *linePtr;
-					//printf("%c %c\n", buffer[charIndex], *linePtr);
-					linePtr++; charIndex++;
-				}
-			}
-			buffer[charIndex] = '\0';
-			charIndex = 0;
-			//printf("%s", buffer);
-			strcpy(dependencies[stringNumber], buffer);
-			//free(buffer);
-			stringNumber++;
-
-			//printf("%d", stringNumber);
-		}
-		int a = 0;
-		//strcpy(dependencies[0], "THIS IS A TEST");
-		printArrayOfStrings(dependencies, stringNumber);
-		while (a < stringNumber)
-		{
-			//printf("%s\n", dependencies[a]);
-			a++;
-		}
-
+		int numDependencies = processLine(linePtr, dependencies);
+		insert(head, target, dependencies, numDependencies, NULL, 0);
 	}
+	// Line is a command line check. Process commands into already created rule
+	// from previous target.
+	else if (line[0] == '\t')
+	{
+		if ((*head)->numCommands >= 10)
+		{
+			printf("%s%s", "Error. Maximum number of commands exceeded for target ", (*head)->target);
+		}
+		strcpy((*head)->commands[(*head)->numCommands], line);
+		(*head)->numCommands++;
+	}
+	// Line is a comment line.
+	else if (line[0] == '#')
+	{
+		return;
+	}  
 }
 
-// readMakeFile() reads in a make file "path" and stores
+// Reads in a make file "path" and stores
 // information in a linked list of Rules.
+// Returns this linked list of Rules.
 
 Rule* readMakeFile(const char* path)
 {
     const int MAX_LINE_LENGTH = 100;
-    int i = 0;
     char line[MAX_LINE_LENGTH];
-   	Rule* head;
+   	Rule* head = malloc(sizeof(Rule));
    	createList(&head);
     FILE* fe = fopen (path, "r");
+	if (fe == NULL)
+	{
+		printf("ERROR. The make file %s could not be found \n", path);
+		exit(1);
+	}
     while (fgets(line, sizeof(line), fe))
     {
-        readLine(line, head);
-        i++;
+        readLine(line, &head);
     }
-   for (Rule* p = head; p!= NULL; p = p->next)
-   {
-   	printf("%s", p->dependencies[0]);
-   }
     fclose(fe);
     return head;
 }
 
-// parseCommand(target, rules) finds a rule for a target
-// and stores the command for building into an array of strings.
+// Finds a rule for a given target in a linked
+// list of rules pointed to by list.
 
-char** parseCommand(const char* target, Rule* rules)
+Rule* findRule(const char* target, Rule* list)
 {
+    for (Rule* p = list; p!= NULL; p = p->next)
+    {
+        if (strcmp(target, p->target) == 0)
+        {
+            return p;
+        }
+    }
     return NULL;
 }
 
-// runCommand(argv) runs a command given by an array
-// of strings.
+// runCommand(argv) runs a command given
+// by a string "command".
 
-void runCommand(char** argv)
+void runCommand(char* command)
 {
-
+	char** argv = malloc(sizeof(char*) * 20);
+	int i;
+	for (i = 0; i < 20; i++)
+	{
+		argv[i] = malloc(sizeof(char) * 30);
+	}
+	int numCommands = processLine(command, argv);
+	argv[numCommands + 1] = NULL;
+    pid_t child = fork();
+    int status;
+    if (child > 0)
+    {
+		pid_t par;
+        par = wait(&status);
+    }
+    else
+    {
+		execvp(argv[0], argv);
+		printf("\n%s\n", "error");
+		exit(0);
+    } 
 }
 
-Rule* findRule(const char* target)
+// Checks whether or not a file "file" exists.
+// Returns true if it does, and false if not.
+
+int fileExists(const char* file)
 {
-    return NULL;
+	struct stat  buffer;   
+  	return (stat (file, &buffer) == 0);
 }
-int main(void)
-  {
-  	Rule* head;
+
+// Builds a single dependency "dependency" 
+// using a rule from rules.
+
+void buildDependency(char* dependency, Rule* rules)
+{
+	if (findRule(dependency, rules) != NULL)
+	{
+		buildTarget(dependency, rules);
+	}
+	else if (fileExists(dependency))
+	{
+		return;
+	}
+
+	else
+	{
+		printf("Error, dependency %s could not be built\n", dependency);
+	}
+}
+
+// Builds a target given by "target", using a rule from
+// rules.
+
+void buildTarget(char* target, Rule* rules)
+{
+	int outOfDate = -1;
+	int i;
+	Rule* g = findRule(target, rules);
+	if (g == NULL)
+	{
+		printf("ERROR. Target %s does not exist in the Makefile \n", target);
+		exit(1);
+	}
+	for (i = 0; i < g->numDependencies; i++)
+	{
+		buildDependency(g->dependencies[i], rules);
+	}
+	if (!fileExists(target))
+	{
+		outOfDate = true;
+	}
+	for (i = 0; i < g->numDependencies; i++)
+	{
+		if (!fileExists(g->dependencies[i]))
+		{
+			outOfDate = true;
+			break;
+		}
+	}
+	if (!upToDate(target, rules))
+	{
+		outOfDate = true;
+	}
+	if (outOfDate == true)
+	{
+		for (i = 0; i < g->numCommands; i++)
+		{
+			printf("Running command.. %s", g->commands[i]);
+			runCommand(g->commands[i]);
+		}
+	}
+	else if (outOfDate != true)
+	{
+		printf("Target %s is up to date\n", target);
+	}
+}
+
+// Returns max of two numbers
+
+int max(int x, int y)
+{
+	if (x > y)
+	{
+		return x;
+	}
+	else
+	{
+		return y;
+	}
+}
+
+// Checks whether or not a target is up to date
+// Returns true if so, and false if not.
+
+int upToDate(char* target, Rule* rules)
+{
+	struct stat st2;
+	int modTime = 0;
+	if (stat(target, &st2) == 0)
+	{
+		modTime = st2.st_mtime;
+	}
+	return modTime >= maxModTime(target, rules);
+}
+
+// Calculates maximum modification time of 
+// a target's dependencies in use as a helper function.
+
+int maxModTime(char* target, Rule* rules)
+{
+	Rule* rl = findRule(target, rules);
+	int maxMod = 0;
+	struct stat st;
+	int i;
+	for (i = 0; i < rl->numDependencies; i++)
+	{
+		if (stat(rl->dependencies[i], &st) == 0)
+		{
+			maxMod = max(maxMod, st.st_mtime);
+		}
+	}
+	return maxMod;
+}
+
+int main(int argc, char** argv)
+{
+	Rule* head;
   	createList(&head);
-  	readMakeFile("Makefile2.txt");
-  	Rule* rl = (Rule*)malloc(sizeof(Rule));
-  	//rl->target = "hello";
-  	Rule* g = (Rule*)malloc(sizeof(Rule));
-  	rl->next = NULL;
-  	fillRule(rl, "hello", NULL, 0, NULL, 0);
-  	g->next = NULL;
-  	g->target = "chase";
-  	insertRule(&head, rl);
-  	insertRule(&head, g);
-  	
-  	//insert(&head, "test2", NULL, 0, NULL, 0);
-  
-    
-      return 0;
-  }
+  	head = readMakeFile("Makefile");
+	if (argc == 2)
+	{
+		buildTarget(argv[1], head);
+	}
+	else
+	{
+		printf("%s\n", "Error, invalid number of command line arguments.");
+	}
+	return 0;
+}
